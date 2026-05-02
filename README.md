@@ -50,33 +50,16 @@ The system supports three user roles — **Admin**, **Doctor**, and **Patient** 
 ---
 
 ## 🏗 System Architecture
-┌─────────────────────────────────────────────────────┐
-│                  PRESENTATION TIER                   │
-│   index.html  admin.html  doctor.html  patient.html  │
-│              style.css    script.js                  │
-└────────────────────┬────────────────────────────────┘
-│  HTTP (Fetch API)
-│  POST/GET — URL encoded
-▼
-┌─────────────────────────────────────────────────────┐
-│                   LOGIC TIER                         │
-│   MainServer.java  (port 8000)                       │
-│   ├── /login        → UserDAO                        │
-│   ├── /book         → AppointmentDAO                 │
-│   ├── /addRecord    → MedicalRecordDAO               │
-│   ├── /getRecords   → MedicalRecordDAO               │
-│   └── /getAppointments → Direct JDBC                 │
-└────────────────────┬────────────────────────────────┘
-│  JDBC (PreparedStatement)
-▼
-┌─────────────────────────────────────────────────────┐
-│                    DATA TIER                         │
-│   MySQL — hospital_db                                │
-│   users · patients · doctors · appointments          │
-│   medical_records · billing                          │
-└─────────────────────────────────────────────────────┘
 
----
+```mermaid
+graph TD
+    A["🌐 Presentation Tier<br/>index.html · admin.html · doctor.html · patient.html<br/>style.css · script.js"] 
+    B["⚙️ Logic Tier<br/>MainServer.java — port 8000<br/>/login · /book · /addRecord · /getRecords · /getAppointments"]
+    C["🗄️ Data Tier<br/>MySQL — hospital_db<br/>users · patients · doctors · appointments · medical_records · billing"]
+
+    A -->|"HTTP Fetch API — POST/GET URL encoded"| B
+    B -->|"JDBC PreparedStatement"| C
+```
 
 ## 👥 Role-Based Access
                     ┌─────────────┐
@@ -222,31 +205,32 @@ Server starts at `http://localhost:8000`
 ---
 
 ## 📁 Project Structure
+
+```
 HospitalMS/
 ├── src/
 │   ├── server/
-│   │   └── MainServer.java       # HTTP server, all endpoints
+│   │   └── MainServer.java          # HTTP server, all endpoints
 │   ├── dao/
-│   │   ├── UserDAO.java          # Authentication queries
-│   │   ├── AppointmentDAO.java   # Booking + conflict check
-│   │   └── MedicalRecordDAO.java # Record insert + fetch
+│   │   ├── UserDAO.java             # Authentication queries
+│   │   ├── AppointmentDAO.java      # Booking + conflict check
+│   │   └── MedicalRecordDAO.java    # Record insert + fetch
 │   └── db/
-│       └── DBConnection.java     # JDBC connection singleton
+│       └── DBConnection.java        # JDBC connection singleton
 ├── web/
-│   ├── index.html                # Login page
-│   ├── admin.html                # Admin dashboard
-│   ├── doctor.html               # Doctor dashboard
-│   ├── patient.html              # Patient dashboard
-│   ├── style.css                 # Shared stylesheet
-│   └── script.js                 # Shared JS utilities + mock DB
+│   ├── index.html                   # Login page
+│   ├── admin.html                   # Admin dashboard
+│   ├── doctor.html                  # Doctor dashboard
+│   ├── patient.html                 # Patient dashboard
+│   ├── style.css                    # Shared stylesheet
+│   └── script.js                    # Shared JS utilities
 ├── database/
-│   ├── schema.sql                # CREATE TABLE statements
-│   └── seed.sql                  # INSERT default data
-├── screenshots/                  # UI screenshots for README
-├── lib/                          # MySQL JDBC connector JAR (add manually)
+│   ├── schema.sql                   # CREATE TABLE statements
+│   └── seed.sql                     # INSERT default data
+├── screenshots/                     # UI screenshots for README
+├── .gitignore
 └── README.md
-
----
+```
 
 ## 🔍 Key Implementation Details
 
@@ -263,3 +247,7 @@ Prescription data contains special characters (`#`, `\n`, `:`). All POST body va
 After login, `{ username, role }` is stored in `sessionStorage`. Every dashboard page calls `requireLogin(expectedRole)` on load — if the session is missing or the role doesn't match, the user is redirected to the login page immediately.
 
 ---
+
+## 👩‍💻 Developed By
+
+**Dewanshi S. Goel** 
