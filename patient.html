@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
+  <title>Patient Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .prescription {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+    .prescription-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .hospital-name {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.1rem;
+      color: var(--accent);
+    }
+    .prescription-date {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .prescription hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .prescription-section {
+      margin-bottom: 14px;
+    }
+    .prescription-section h4 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .prescription-section p {
+      font-size: 13.5px;
+      color: var(--text);
+    }
+    .prescription-section ul {
+      padding-left: 18px;
+      margin: 0;
+    }
+    .prescription-section ul li {
+      font-size: 13.5px;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+    .prescription-footer {
+      margin-top: 20px;
+      text-align: right;
+      font-style: italic;
+      font-size: 13px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+    .book-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 480px;
+    }
+    .book-form select,
+    .book-form input[type="datetime-local"] {
+      width: 100%;
+    }
+    .no-records {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .no-records .icon {
+      font-size: 40px;
+      display: block;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+
+<body onload="initPatient()">
+
+<div class="app-shell">
+
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="logo-icon">🏥</div>
+      <span>MediCore HMS</span>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="avatarInitial">P</div>
+        <span id="topbarUsername">Patient</span>
+      </div>
+      <button class="btn-logout" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">Menu</div>
+    <div class="nav-item active" id="nav1" onclick="activatePage('book','nav1')">
+      <span class="icon">📅</span> Book Appointment
+    </div>
+    <div class="nav-item" id="nav2" onclick="activatePage('records','nav2'); loadRecords()">
+      <span class="icon">📄</span> Medical Records
+    </div>
+  </div>
+
+  <div class="main">
+
+    <div class="page active" id="book">
+      <div class="page-header">
+        <div>
+          <h2>Book Appointment</h2>
+          <p>Select a doctor and choose a date &amp; time</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>📅 New Appointment</h3></div>
+        <div class="card-body">
+          <div class="book-form">
+            <div class="form-group">
+              <label>Select Doctor</label>
+              <select id="doctorSelect">
+                <option value="D001">Dr. Kavya Nair — Cardiology</option>
+                <option value="D002">Dr. Rohan Patel — Neurology</option>
+                <option value="D003">Dr. Anita Desai — Orthopedics</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Appointment Type</label>
+              <select id="apptType">
+                <option value="regular">Regular</option>
+                <option value="emergency">Emergency</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Date &amp; Time</label>
+              <input type="datetime-local" id="dateTime">
+            </div>
+            <button class="btn btn-primary" style="width:fit-content" onclick="bookAppointment()">
+              Confirm Booking →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="records">
+      <div class="page-header">
+        <div>
+          <h2>Medical Records</h2>
+          <p>Your prescriptions and diagnoses from past visits</p>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="loadRecords()">↺ Refresh</button>
+      </div>
+      <div id="recordsList"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="script.js"></script>
+
+<script>
+
+  function initPatient() {
+    const user = requireLogin('patient');
+    if (!user) return;
+    document.getElementById('topbarUsername').textContent = user.username;
+    document.getElementById('avatarInitial').textContent = user.username.charAt(0).toUpperCase();
+  }
+
+  async function bookAppointment() {
+    const doctorId = document.getElementById('doctorSelect').value;
+    const type     = document.getElementById('apptType').value;
+    const raw      = document.getElementById('dateTime').value;
+
+    if (!raw) { showToast("Please select a date and time.", "error"); return; }
+
+    const datetime = raw.replace("T", " ") + ":00";
+
+    try {
+      const res = await fetch('http://localhost:8000/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `patientId=P001&doctorId=${doctorId}&datetime=${encodeURIComponent(datetime)}&type=${type}`
+      });
+      const result = await res.text();
+      if (result === "conflict") {
+        showToast("Doctor already booked at that time. Choose another slot.", "error");
+      } else if (result === "success") {
+        showToast("Appointment booked successfully!", "success");
+        document.getElementById('dateTime').value = "";
+      } else {
+        showToast("Server error: " + result, "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server.", "error");
+    }
+  }
+
+  // Guard: prevents multiple simultaneous fetches if user clicks rapidly
+  let recordsLoading = false;
+
+  async function loadRecords() {
+    if (recordsLoading) return;
+    recordsLoading = true;
+
+    const container = document.getElementById('recordsList');
+
+    // Wipe completely before anything else
+    container.innerHTML = '';
+    container.innerHTML = '<div class="no-records"><span class="icon">⏳</span>Loading records...</div>';
+
+    try {
+      const res = await fetch('http://localhost:8000/getRecords?patientId=P001');
+      const raw = await res.text();
+
+      // Paste what you see here in browser console (F12) if issues persist
+      console.log("RAW SERVER RESPONSE:", JSON.stringify(raw));
+
+      // Wipe spinner before rendering
+      container.innerHTML = '';
+
+      if (!raw || !raw.trim()) {
+        container.innerHTML = '<div class="no-records"><span class="icon">📋</span>No records found.</div>';
+        recordsLoading = false;
+        return;
+      }
+
+      // Split on ## separator, drop empty segments
+      const segments = raw.split("##").filter(s => s.trim() !== "");
+      console.log("TOTAL SEGMENTS:", segments.length);
+
+      if (segments.length === 0) {
+        container.innerHTML = '<div class="no-records"><span class="icon">📋</span>No records found.</div>';
+        recordsLoading = false;
+        return;
+      }
+
+      // Deduplicate — if Java sends the same record multiple times, only render once
+      const seen   = new Set();
+      const unique = segments.filter(s => {
+        const key = s.trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      console.log("UNIQUE SEGMENTS AFTER DEDUP:", unique.length);
+
+      unique.forEach((segment, idx) => {
+        const text = segment.replace(/\\n/g, "\n").trim();
+
+        const firstPipe = text.indexOf("|");
+        const lastPipe  = text.lastIndexOf("|");
+
+        if (firstPipe === -1 || lastPipe === -1 || firstPipe === lastPipe) {
+          console.warn("Skipping malformed segment", idx, JSON.stringify(text));
+          return;
+        }
+
+        const diagnosis    = text.substring(0, firstPipe).trim();
+        const prescription = text.substring(firstPipe + 1, lastPipe).trim();
+        const date         = text.substring(lastPipe + 1).trim();
+
+        let medicinesHtml = "";
+        let dosHtml       = "";
+        let dontsHtml     = "";
+
+        prescription.split("\n").forEach(line => {
+          line = line.trim();
+          if (line.startsWith("Medicines:")) {
+            const items = line.replace("Medicines:", "").split("#").map(i => i.trim()).filter(Boolean);
+            medicinesHtml = `<div class="prescription-section"><h4>Medicines</h4><ul>${items.map(i => `<li>${i}</li>`).join("")}</ul></div>`;
+          } else if (line.startsWith("Do:")) {
+            const items = line.replace("Do:", "").split("#").map(i => i.trim()).filter(Boolean);
+            dosHtml = `<div class="prescription-section"><h4>Do's</h4><ul>${items.map(i => `<li>${i}</li>`).join("")}</ul></div>`;
+          } else if (line.startsWith("Don't:")) {
+            const items = line.replace("Don't:", "").split("#").map(i => i.trim()).filter(Boolean);
+            dontsHtml = `<div class="prescription-section"><h4>Don'ts</h4><ul>${items.map(i => `<li>${i}</li>`).join("")}</ul></div>`;
+          }
+        });
+
+        const card = document.createElement("div");
+        card.className = "prescription";
+        card.innerHTML = `
+          <div class="prescription-header">
+            <div class="hospital-name">🏥 MediCore Hospital</div>
+            <div class="prescription-date">${date}</div>
+          </div>
+          <hr>
+          <div class="prescription-section"><h4>Diagnosis</h4><p>${diagnosis}</p></div>
+          ${medicinesHtml}
+          ${dosHtml}
+          ${dontsHtml}
+          <div class="prescription-footer">— Doctor Signature</div>
+        `;
+        container.appendChild(card);
+      });
+
+    } catch (err) {
+      container.innerHTML = '<div class="no-records"><span class="icon">⚠️</span>Cannot connect to server. Is Java running on port 8000?</div>';
+      console.error("Fetch error:", err);
+    }
+
+    recordsLoading = false;
+  }
+
+</script>
+
+</body>
+</html>

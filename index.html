@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MediCore HMS — Login</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+    }
+    /* decorative background grid */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    /* large accent circle */
+    body::after {
+      content: '';
+      position: fixed;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-lt) 0%, transparent 70%);
+      top: -150px; right: -150px;
+      pointer-events: none;
+    }
+    .login-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      width: 840px;
+      max-width: 96vw;
+      position: relative;
+      z-index: 1;
+      animation: slideUp 0.5s cubic-bezier(0.16,1,0.3,1) both;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to   { opacity: 1; transform: none; }
+    }
+    /* Left panel */
+    .login-panel {
+      background: var(--accent);
+      padding: 48px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+    .login-panel::before {
+      content: '+';
+      position: absolute;
+      font-size: 280px;
+      font-family: 'DM Serif Display', serif;
+      color: rgba(255,255,255,0.06);
+      right: -40px; bottom: -40px;
+      line-height: 1;
+    }
+    .login-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+    }
+    .login-brand .logo {
+      width: 40px; height: 40px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+    .login-brand h1 {
+      font-size: 1.3rem;
+      color: #fff;
+    }
+    .login-tagline {
+      color: rgba(255,255,255,0.75);
+      font-size: 13px;
+      margin-top: 4px;
+      font-weight: 400;
+    }
+    .login-panel-body { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 32px 0; }
+    .login-panel-body h2 { color: #fff; font-size: 1.9rem; line-height: 1.2; }
+    .login-panel-body p { color: rgba(255,255,255,0.65); margin-top: 10px; font-size: 13.5px; line-height: 1.7; }
+    .login-roles {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 24px;
+    }
+    .role-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 9px 14px;
+      color: rgba(255,255,255,0.85);
+      font-size: 13px;
+    }
+    .role-pill .icon { font-size: 16px; }
+    .login-footer { color: rgba(255,255,255,0.4); font-size: 11px; }
+
+    /* Right panel - form */
+    .login-form-panel {
+      padding: 48px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .login-form-panel h2 { font-size: 1.6rem; margin-bottom: 6px; }
+    .login-form-panel > p { color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+    .login-form { display: flex; flex-direction: column; gap: 18px; }
+    .login-form .form-group { gap: 6px; }
+    .role-select-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+    .role-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 10px 6px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      transition: all 0.18s;
+    }
+    .role-btn .icon { font-size: 20px; }
+    .role-btn.selected {
+      border-color: var(--accent);
+      background: var(--accent-lt);
+      color: var(--accent);
+    }
+    .error-msg {
+      background: var(--red-lt);
+      color: var(--red);
+      border-radius: 7px;
+      padding: 10px 14px;
+      font-size: 13px;
+      display: none;
+    }
+    .error-msg.show { display: block; }
+    .btn-login {
+      width: 100%;
+      justify-content: center;
+      padding: 11px;
+      font-size: 14px;
+      border-radius: 8px;
+      margin-top: 4px;
+    }
+    .demo-hint {
+      margin-top: 18px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .demo-hint strong { color: var(--text); }
+    @media (max-width: 680px) {
+      .login-wrap { grid-template-columns: 1fr; }
+      .login-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <!-- Left visual panel -->
+    <div class="login-panel">
+      <div class="login-brand">
+        <div class="logo">🏥</div>
+        <div>
+          <h1>MediCore HMS</h1>
+          <p class="login-tagline">Hospital Management System</p>
+        </div>
+      </div>
+      <div class="login-panel-body">
+        <h2>Manage your hospital, effortlessly.</h2>
+        <p>A unified platform for patients, doctors, and administrators to coordinate care, appointments, and records.</p>
+        <div class="login-roles">
+          <div class="role-pill"><span class="icon">🛡️</span> Admin — full system access</div>
+          <div class="role-pill"><span class="icon">👨‍⚕️</span> Doctor — patient &amp; appointment view</div>
+          <div class="role-pill"><span class="icon">🧑‍🦯</span> Patient — self-service portal</div>
+        </div>
+      </div>
+      <div class="login-footer">MediCore HMS</div>
+    </div>
+
+    <!-- Right form panel -->
+    <div class="login-form-panel">
+      <h2>Welcome back</h2>
+      <p>Sign in to your account to continue</p>
+
+      <div class="login-form">
+        <div class="form-group">
+          <label>Login as</label>
+          <div class="role-select-group">
+            <button class="role-btn selected" data-role="admin" onclick="selectRole('admin')">
+              <span class="icon">🛡️</span> Admin
+            </button>
+            <button class="role-btn" data-role="doctor" onclick="selectRole('doctor')">
+              <span class="icon">👨‍⚕️</span> Doctor
+            </button>
+            <button class="role-btn" data-role="patient" onclick="selectRole('patient')">
+              <span class="icon">🧑</span> Patient
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" placeholder="Enter your username" autocomplete="username"/>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter') doLogin()"/>
+        </div>
+
+        <div class="error-msg" id="loginError">Invalid username or password. Please try again.</div>
+
+        <button class="btn btn-primary btn-login" onclick="doLogin()">Sign In →</button>
+      </div>
+
+      <div class="demo-hint">
+        <strong>Demo credentials</strong><br/>
+        Admin: <strong>admin</strong> / <strong>admin123</strong><br/>
+        Doctor: <strong>doctor1</strong> / <strong>doc123</strong><br/>
+        Patient: <strong>patient1</strong> / <strong>pat123</strong>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedRole = 'admin';
+
+    function selectRole(role) {
+      selectedRole = role;
+      document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
+      document.querySelector(`[data-role="${role}"]`).classList.add('selected');
+    }
+
+    async function doLogin() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+
+  const res = await fetch('http://localhost:8000/login', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: `username=${username}&password=${password}`
+  });
+
+  const role = await res.text();
+
+  if (role === "invalid") {
+    document.getElementById('loginError').textContent = "Invalid credentials";
+    document.getElementById('loginError').classList.add('show');
+    return;
+  }
+
+  if (role !== selectedRole) {
+    document.getElementById('loginError').textContent = "Wrong role selected!";
+    document.getElementById('loginError').classList.add('show');
+    return;
+  }
+  sessionStorage.setItem('hms_user', JSON.stringify({ username, role }));
+
+  window.location.href = role + ".html";
+}
+  </script>
+</body>
+</html>

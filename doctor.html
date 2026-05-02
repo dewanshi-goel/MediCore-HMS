@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
+  <title>Doctor Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body onload="initDoctor()">
+
+<div class="app-shell">
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="logo-icon">🏥</div>
+    <span>MediCore HMS</span>
+  </div>
+  <button class="btn-logout" onclick="logout()">Logout</button>
+</div>
+
+<div class="sidebar">
+  <div class="nav-item active" onclick="activatePage('appointments','nav1')" id="nav1">📅 Appointments</div>
+  <div class="nav-item" onclick="activatePage('addRecord','nav2')" id="nav2">📝 Add Record</div>
+</div>
+
+<div class="main">
+  <div class="page" id="addRecord">
+  <div class="card">
+
+    <div class="card-header">
+      <h3>🩺 Add Medical Record</h3>
+    </div>
+
+    <div class="card-body">
+
+      <!-- BASIC INFO -->
+      <div class="form-row">
+        <input type="text" id="patientId" placeholder="Patient ID (P001)">
+        <input type="text" id="apptId" placeholder="Appointment ID (A001)">
+      </div>
+
+      <!-- OBSERVATIONS -->
+      <h4>Observations</h4>
+
+      <textarea id="symptoms" placeholder="Symptoms (use # to separate)"></textarea>
+
+      <input type="text" id="diagnosis" placeholder="Diagnosis">
+
+      <!-- PRESCRIPTION -->
+      <h4>Prescription</h4>
+
+      <textarea id="medicines" placeholder="Medicines & Dosage (use # and @)"></textarea>
+
+      <input type="text" id="dos" placeholder="Do's (# separated)">
+      <input type="text" id="donts" placeholder="Don'ts (# separated)">
+
+      <input type="text" id="investigations" placeholder="Investigations">
+
+      <input type="date" id="followup">
+
+      <input type="number" id="fees" placeholder="Fees">
+
+      <button class="btn btn-primary" onclick="addRecord()">Save Record</button>
+
+    </div>
+  </div>
+</div>
+
+<div class="page active" id="appointments">
+  <div class="card">
+    <div class="card-header"><h3>My Appointments</h3></div>
+    <div class="card-body">
+      <table id="doctorAppts"></table>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script src="script.js"></script>
+
+<script>
+function initDoctor(){
+  const user = requireLogin('doctor');
+
+  let html = "<tr><th>Patient</th><th>Date</th><th>Status</th></tr>";
+
+  DB.appointments.forEach(a=>{
+    html += `<tr>
+      <td>${DB.getPatient(a.patient_id).name}</td>
+      <td>${fmtDateTime(a.datetime)}</td>
+      <td>${a.status}</td>
+    </tr>`;
+  });
+
+  document.getElementById('doctorAppts').innerHTML = html;
+}
+
+async function addRecord() {
+
+  const patientId = document.getElementById('patientId').value;
+  const apptId = document.getElementById('apptId').value;
+
+  const symptoms = document.getElementById('symptoms').value;
+  const diagnosis = document.getElementById('diagnosis').value;
+
+  const medicines = document.getElementById('medicines').value;
+  const dos = document.getElementById('dos').value;
+  const donts = document.getElementById('donts').value;
+
+  const investigations = document.getElementById('investigations').value;
+  const followup = document.getElementById('followup').value;
+  const fees = document.getElementById('fees').value;
+
+  // 🔥 Combine data (important)
+  const finalDiagnosis = diagnosis;
+
+  const prescription =
+    `Medicines: ${medicines}\nDo: ${dos}\nDon't: ${donts}`;
+
+  const notes =
+    `Symptoms: ${symptoms}\nInvestigations: ${investigations}\nFollow-up: ${followup}\nFees: ${fees}`;
+
+  const res = await fetch('http://localhost:8000/addRecord', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: `patientId=${encodeURIComponent(patientId)}&doctorId=D001&apptId=${encodeURIComponent(apptId)}&diagnosis=${encodeURIComponent(finalDiagnosis)}&prescription=${encodeURIComponent(prescription)}&notes=${encodeURIComponent(notes)}`
+  });
+
+  const result = await res.text();
+
+  if (result === "success") {
+    showToast("Record added!", "success");
+  } else {
+    showToast("Error adding record", "error");
+  }
+}
+
+</script>
+
+<div id="toast"></div>
+
+</body>
+</html>
