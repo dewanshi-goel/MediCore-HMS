@@ -26,7 +26,7 @@ public class AppointmentDAO {
             }
 
             // STEP 2: INSERT
-            String insertSql = "INSERT INTO appointments VALUES (?, ?, ?, ?, 'scheduled', ?)";
+            String insertSql = "INSERT INTO appointments VALUES (?, ?, ?, ?, 'pending', ?)";
             PreparedStatement insertStmt = conn.prepareStatement(insertSql);
             insertStmt.setString(1, apptId);
             insertStmt.setString(2, patientId);

@@ -4,6 +4,7 @@ import com.sun.net.httpserver.*;
 
 import dao.AppointmentDAO;
 import dao.MedicalRecordDAO;
+import dao.PatientDAO;
 import dao.UserDAO;
 import db.DBConnection;
 
@@ -17,41 +18,52 @@ import java.util.List;
 
 public class MainServer {
 
-    // ── Moved outside lambda to avoid checked exception problem ──
-    private static String fetchAppointments(String patientId) throws Exception {
+    private static String fetchAppointments(String patientId, String doctorId) throws Exception {
         Connection conn = DBConnection.getConnection();
 
-        String sql = (patientId != null)
-            ? "SELECT a.appt_id, p.name, d.name, a.appt_datetime, a.status, a.type " +
-              "FROM appointments a " +
-              "JOIN patients p ON a.patient_id = p.patient_id " +
-              "JOIN doctors d ON a.doctor_id = d.doctor_id " +
-              "WHERE a.patient_id = ?"
-            : "SELECT a.appt_id, p.name, d.name, a.appt_datetime, a.status, a.type " +
-              "FROM appointments a " +
-              "JOIN patients p ON a.patient_id = p.patient_id " +
-              "JOIN doctors d ON a.doctor_id = d.doctor_id";
+        String sql;
+        PreparedStatement stmt;
 
-        PreparedStatement stmt = conn.prepareStatement(sql);
-        if (patientId != null) stmt.setString(1, patientId);
+        if (patientId != null) {
+            sql = "SELECT a.appt_id, p.name, d.name, a.appt_datetime, a.status, a.type " +
+                "FROM appointments a " +
+                "JOIN patients p ON a.patient_id = p.patient_id " +
+                "JOIN doctors d ON a.doctor_id = d.doctor_id " +
+                "WHERE a.patient_id = ?";
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, patientId);
+        } else if (doctorId != null) {
+            sql = "SELECT a.appt_id, p.name, d.name, a.appt_datetime, a.status, a.type " +
+                "FROM appointments a " +
+                "JOIN patients p ON a.patient_id = p.patient_id " +
+                "JOIN doctors d ON a.doctor_id = d.doctor_id " +
+                "WHERE a.doctor_id = ?";
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, doctorId);
+        } else {
+            sql = "SELECT a.appt_id, p.name, d.name, a.appt_datetime, a.status, a.type " +
+                "FROM appointments a " +
+                "JOIN patients p ON a.patient_id = p.patient_id " +
+                "JOIN doctors d ON a.doctor_id = d.doctor_id";
+            stmt = conn.prepareStatement(sql);
+        }
 
         ResultSet rs = stmt.executeQuery();
         StringBuilder sb = new StringBuilder();
 
         while (rs.next()) {
-            sb.append(rs.getString(1)).append("|")   // appt_id
-              .append(rs.getString(2)).append("|")   // patient name
-              .append(rs.getString(3)).append("|")   // doctor name
-              .append(rs.getString(4)).append("|")   // datetime
-              .append(rs.getString(5)).append("|")   // status
-              .append(rs.getString(6)).append("##"); // type
+            sb.append(rs.getString(1)).append("|")
+            .append(rs.getString(2)).append("|")
+            .append(rs.getString(3)).append("|")
+            .append(rs.getString(4)).append("|")
+            .append(rs.getString(5)).append("|")
+            .append(rs.getString(6)).append("##");
         }
 
         rs.close();
         stmt.close();
         return sb.toString();
     }
-
     public static void main(String[] args) throws Exception {
 
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
@@ -172,10 +184,206 @@ public class MainServer {
         // ── GET APPOINTMENTS ──
         server.createContext("/getAppointments", exchange -> {
             String query     = exchange.getRequestURI().getQuery();
-            String patientId = (query != null && query.contains("patientId"))
-                               ? query.split("=")[1] : null;
+            String patientId = null;
+            String doctorId  = null;
+
+            if (query != null) {
+                for (String param : query.split("&")) {
+                    String[] kv = param.split("=");
+                    if (kv.length < 2) continue;
+                    if (kv[0].equals("patientId")) patientId = URLDecoder.decode(kv[1], "UTF-8");
+                    if (kv[0].equals("doctorId"))  doctorId  = URLDecoder.decode(kv[1], "UTF-8");
+                }
+            }
+
+            final String finalDoctorId = doctorId;
             try {
-                String resp = fetchAppointments(patientId);
+                String resp = fetchAppointments(patientId, finalDoctorId);
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(200, resp.getBytes().length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(resp.getBytes());
+                os.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+                String err = "error";
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(500, err.getBytes().length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(err.getBytes());
+                os.close();
+            }
+        });
+
+        // ── SEARCH PATIENT ──
+        server.createContext("/searchPatient", exchange -> {
+            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+
+            String query = exchange.getRequestURI().getQuery();
+            String searchTerm = "";
+
+            if (query != null && query.startsWith("name=")) {
+                searchTerm = URLDecoder.decode(query.split("=")[1], "UTF-8");
+            }
+
+            PatientDAO dao = new PatientDAO();
+            List<String> patients = dao.searchByName(searchTerm);
+
+            StringBuilder sb = new StringBuilder();
+            for (String p : patients) {
+                sb.append(p).append("##");
+            }
+
+            String resp = sb.toString();
+            exchange.sendResponseHeaders(200, resp.getBytes().length);
+            OutputStream os = exchange.getResponseBody();
+            os.write(resp.getBytes());
+            os.close();
+        });
+
+        // ── GET ALL DOCTORS ──
+        server.createContext("/getDoctors", exchange -> {
+            try {
+                Connection conn = DBConnection.getConnection();
+                String sql = "SELECT doctor_id, name, specialization, phone, available_days FROM doctors";
+                PreparedStatement stmt = conn.prepareStatement(sql);
+                ResultSet rs = stmt.executeQuery();
+                StringBuilder sb = new StringBuilder();
+                while (rs.next()) {
+                    sb.append(rs.getString(1)).append("|")
+                    .append(rs.getString(2)).append("|")
+                    .append(rs.getString(3)).append("|")
+                    .append(rs.getString(4)).append("|")
+                    .append(rs.getString(5)).append("##");
+                }
+                rs.close();
+                stmt.close();
+                String resp = sb.toString();
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(200, resp.getBytes().length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(resp.getBytes());
+                os.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+                String err = "error";
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(500, err.getBytes().length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(err.getBytes());
+                os.close();
+            }
+        });
+
+        // ── GET ALL PATIENTS ──
+        server.createContext("/getPatients", exchange -> {
+            try {
+                Connection conn = DBConnection.getConnection();
+                String sql = "SELECT patient_id, name, phone FROM patients";
+                PreparedStatement stmt = conn.prepareStatement(sql);
+                ResultSet rs = stmt.executeQuery();
+                StringBuilder sb = new StringBuilder();
+                while (rs.next()) {
+                    sb.append(rs.getString(1)).append("|")
+                    .append(rs.getString(2)).append("|")
+                    .append(rs.getString(3)).append("##");
+                }
+                rs.close();
+                stmt.close();
+                String resp = sb.toString();
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(200, resp.getBytes().length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(resp.getBytes());
+                os.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+                String err = "error";
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(500, err.getBytes().length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(err.getBytes());
+                os.close();
+            }
+        });
+
+        // ── GET SLOTS ──
+        server.createContext("/getSlots", exchange -> {
+            try {
+                String query = exchange.getRequestURI().getQuery();
+                String doctorId = null, date = null;
+                for (String param : query.split("&")) {
+                    String[] kv = param.split("=");
+                    if (kv.length < 2) continue;
+                    if (kv[0].equals("doctorId")) doctorId = URLDecoder.decode(kv[1], "UTF-8");
+                    if (kv[0].equals("date"))     date     = URLDecoder.decode(kv[1], "UTF-8");
+                }
+
+                Connection conn = DBConnection.getConnection();
+
+                // Get doctor's available days
+                String daysSql = "SELECT available_days FROM doctors WHERE doctor_id = ?";
+                PreparedStatement daysStmt = conn.prepareStatement(daysSql);
+                daysStmt.setString(1, doctorId);
+                ResultSet daysRs = daysStmt.executeQuery();
+                String availableDays = daysRs.next() ? daysRs.getString(1) : "";
+                daysRs.close(); daysStmt.close();
+
+                // Get already booked slots for that doctor on that date
+                String slotsSql = "SELECT appt_datetime FROM appointments " +
+                                "WHERE doctor_id = ? AND DATE(appt_datetime) = ? " +
+                                "AND status != 'cancelled'";
+                PreparedStatement slotsStmt = conn.prepareStatement(slotsSql);
+                slotsStmt.setString(1, doctorId);
+                slotsStmt.setString(2, date);
+                ResultSet slotsRs = slotsStmt.executeQuery();
+
+                StringBuilder bookedSlots = new StringBuilder();
+                while (slotsRs.next()) {
+                    String dt = slotsRs.getString(1); // "2026-06-10 10:00:00"
+                    String time = dt.substring(11, 16); // "10:00"
+                    bookedSlots.append(time).append(",");
+                }
+                slotsRs.close(); slotsStmt.close();
+
+                String resp = availableDays + "|" + bookedSlots.toString();
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(200, resp.getBytes().length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(resp.getBytes());
+                os.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+                String err = "error";
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(500, err.getBytes().length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(err.getBytes());
+                os.close();
+            }
+        });
+
+        // ── UPDATE APPOINTMENT STATUS ──
+        server.createContext("/updateStatus", exchange -> {
+            try {
+                String body = new String(exchange.getRequestBody().readAllBytes());
+                String apptId = null, status = null;
+                for (String param : body.split("&")) {
+                    String[] kv = param.split("=");
+                    if (kv.length < 2) continue;
+                    if (kv[0].equals("apptId"))  apptId = URLDecoder.decode(kv[1], "UTF-8");
+                    if (kv[0].equals("status"))  status = URLDecoder.decode(kv[1], "UTF-8");
+                }
+
+                Connection conn = DBConnection.getConnection();
+                String sql = "UPDATE appointments SET status = ? WHERE appt_id = ?";
+                PreparedStatement stmt = conn.prepareStatement(sql);
+                stmt.setString(1, status);
+                stmt.setString(2, apptId);
+                int rows = stmt.executeUpdate();
+                stmt.close();
+
+                String resp = rows > 0 ? "success" : "error";
                 exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
                 exchange.sendResponseHeaders(200, resp.getBytes().length);
                 OutputStream os = exchange.getResponseBody();

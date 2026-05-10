@@ -126,21 +126,19 @@
       <div class="page-header">
         <div>
           <h2>Book Appointment</h2>
-          <p>Select a doctor and choose a date &amp; time</p>
+          <p>Select a doctor and choose an available slot</p>
         </div>
       </div>
       <div class="card">
         <div class="card-header"><h3>📅 New Appointment</h3></div>
         <div class="card-body">
           <div class="book-form">
+
             <div class="form-group">
               <label>Select Doctor</label>
-              <select id="doctorSelect">
-                <option value="D001">Dr. Kavya Nair — Cardiology</option>
-                <option value="D002">Dr. Rohan Patel — Neurology</option>
-                <option value="D003">Dr. Anita Desai — Orthopedics</option>
-              </select>
+              <select id="doctorSelect" onchange="onDoctorChange()"></select>
             </div>
+
             <div class="form-group">
               <label>Appointment Type</label>
               <select id="apptType">
@@ -148,13 +146,50 @@
                 <option value="emergency">Emergency</option>
               </select>
             </div>
-            <div class="form-group">
-              <label>Date &amp; Time</label>
-              <input type="datetime-local" id="dateTime">
+
+            <div class="form-group" id="availableDaysNote" style="display:none;">
+              <label>Doctor's Available Days</label>
+              <div id="daysDisplay" style="
+                padding: 8px 12px;
+                background: var(--accent-lt);
+                border-radius: 6px;
+                font-size: 13px;
+                color: var(--accent);
+                font-weight: 500;
+              "></div>
             </div>
-            <button class="btn btn-primary" style="width:fit-content" onclick="bookAppointment()">
+
+            <div class="form-group">
+              <label>Select Date</label>
+              <input type="date" id="apptDate"
+                    oninput="onDateChange()"
+                    style="width:100%;">
+              <div id="dateError" style="
+                display:none;
+                color:var(--red);
+                font-size:12px;
+                margin-top:4px;
+                font-style:italic;
+              "></div>
+            </div>
+
+            <div class="form-group" id="slotsSection" style="display:none;">
+              <label>Available Time Slots</label>
+              <div id="slotsGrid" style="
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+                gap: 8px;
+                margin-top: 4px;
+              "></div>
+            </div>
+
+            <input type="hidden" id="selectedSlot">
+
+            <button class="btn btn-primary" style="width:fit-content"
+                    onclick="bookAppointment()">
               Confirm Booking →
             </button>
+
           </div>
         </div>
       </div>
@@ -180,148 +215,255 @@
 
 <script>
 
-  function initPatient() {
-    const user = requireLogin('patient');
-    if (!user) return;
-    document.getElementById('topbarUsername').textContent = user.username;
-    document.getElementById('avatarInitial').textContent = user.username.charAt(0).toUpperCase();
+async function initPatient() {
+  const user = requireLogin('patient');
+  if (!user) return;
+  document.getElementById('topbarUsername').textContent = user.username;
+  document.getElementById('avatarInitial').textContent = user.username.charAt(0).toUpperCase();
+  await loadDoctorDropdown();
+  onDoctorChange();
+}
+
+async function loadDoctorDropdown() {
+  const res = await fetch('http://localhost:8000/getDoctors');
+  const raw = await res.text();
+  const select = document.getElementById('doctorSelect');
+  select.innerHTML = '';
+  raw.split('##').filter(s => s.trim()).forEach(row => {
+    const [id, name, spec] = row.split('|');
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = `${name} — ${spec}`;
+    select.appendChild(opt);
+  });
+}
+
+// Maps "Mon" -> 1, "Tue" -> 2, etc.
+const DAY_MAP = { Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6, Sun:0 };
+
+let currentAvailableDays = [];
+
+async function onDoctorChange() {
+  // Reset date and slots
+  document.getElementById('apptDate').value = '';
+  document.getElementById('slotsSection').style.display = 'none';
+  document.getElementById('slotsGrid').innerHTML = '';
+  document.getElementById('selectedSlot').value = '';
+  document.getElementById('dateError').style.display = 'none';
+
+  const doctorId = document.getElementById('doctorSelect').value;
+  if (!doctorId) return;
+
+  // Fetch available days for selected doctor
+  const res = await fetch(`http://localhost:8000/getSlots?doctorId=${doctorId}&date=2000-01-01`);
+  const raw = await res.text();
+  const availableDays = raw.split('|')[0]; // e.g. "Mon,Wed,Fri"
+
+  currentAvailableDays = availableDays.split(',').map(d => d.trim());
+
+  // Show available days note
+  document.getElementById('daysDisplay').textContent = currentAvailableDays.join('  •  ');
+  document.getElementById('availableDaysNote').style.display = 'block';
+
+  // Set min date to today
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('apptDate').min = today;
+}
+
+function isDayAvailable(dateStr) {
+  const date = new Date(dateStr + 'T00:00:00');
+  const dayIndex = date.getDay(); // 0=Sun, 1=Mon...
+  return currentAvailableDays.some(d => DAY_MAP[d] === dayIndex);
+}
+
+async function onDateChange() {
+  const dateStr = document.getElementById('apptDate').value;
+  const dateError = document.getElementById('dateError');
+  const slotsSection = document.getElementById('slotsSection');
+  const slotsGrid = document.getElementById('slotsGrid');
+
+  document.getElementById('selectedSlot').value = '';
+  slotsGrid.innerHTML = '';
+  slotsSection.style.display = 'none';
+  dateError.style.display = 'none';
+
+  if (!dateStr) return;
+
+  // Check if selected day is available
+  if (!isDayAvailable(dateStr)) {
+    dateError.textContent = `This doctor is not available on ${new Date(dateStr + 'T00:00:00')
+      .toLocaleDateString('en-US', {weekday:'long'})}. Available days: ${currentAvailableDays.join(', ')}`;
+    dateError.style.display = 'block';
+    return;
   }
 
-  async function bookAppointment() {
-    const doctorId = document.getElementById('doctorSelect').value;
-    const type     = document.getElementById('apptType').value;
-    const raw      = document.getElementById('dateTime').value;
+  // Fetch booked slots for this doctor on this date
+  const doctorId = document.getElementById('doctorSelect').value;
+  const res = await fetch(`http://localhost:8000/getSlots?doctorId=${doctorId}&date=${dateStr}`);
+  const raw = await res.text();
+  const bookedSlots = raw.split('|')[1]
+    ? raw.split('|')[1].split(',').filter(s => s.trim())
+    : [];
 
-    if (!raw) { showToast("Please select a date and time.", "error"); return; }
+  // Generate 10:00 - 17:00 in 30 min slots
+  const allSlots = [];
+  for (let h = 10; h < 17; h++) {
+    allSlots.push(`${String(h).padStart(2,'0')}:00`);
+    allSlots.push(`${String(h).padStart(2,'0')}:30`);
+  }
 
-    const datetime = raw.replace("T", " ") + ":00";
-
-    try {
-      const res = await fetch('http://localhost:8000/book', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `patientId=P001&doctorId=${doctorId}&datetime=${encodeURIComponent(datetime)}&type=${type}`
-      });
-      const result = await res.text();
-      if (result === "conflict") {
-        showToast("Doctor already booked at that time. Choose another slot.", "error");
-      } else if (result === "success") {
-        showToast("Appointment booked successfully!", "success");
-        document.getElementById('dateTime').value = "";
-      } else {
-        showToast("Server error: " + result, "error");
-      }
-    } catch (err) {
-      showToast("Cannot connect to server.", "error");
+  slotsGrid.innerHTML = '';
+  allSlots.forEach(slot => {
+    const isBooked = bookedSlots.includes(slot);
+    const btn = document.createElement('button');
+    btn.textContent = slot;
+    btn.style.cssText = `
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid ${isBooked ? 'var(--border)' : 'var(--accent)'};
+      background: ${isBooked ? 'var(--bg)' : 'var(--surface)'};
+      color: ${isBooked ? 'var(--muted)' : 'var(--accent)'};
+      cursor: ${isBooked ? 'not-allowed' : 'pointer'};
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s;
+    `;
+    if (!isBooked) {
+      btn.onclick = () => selectSlot(slot, btn);
     }
+    slotsGrid.appendChild(btn);
+  });
+
+  slotsSection.style.display = 'block';
+}
+
+function selectSlot(slot, btn) {
+  // Deselect all
+  document.querySelectorAll('#slotsGrid button').forEach(b => {
+    if (!b.disabled) {
+      b.style.background = 'var(--surface)';
+      b.style.color = 'var(--accent)';
+      b.style.fontWeight = '500';
+    }
+  });
+  // Select clicked
+  btn.style.background = 'var(--accent)';
+  btn.style.color = '#fff';
+  btn.style.fontWeight = '600';
+  document.getElementById('selectedSlot').value = slot;
+}
+
+async function bookAppointment() {
+  const doctorId = document.getElementById('doctorSelect').value;
+  const type     = document.getElementById('apptType').value;
+  const date     = document.getElementById('apptDate').value;
+  const slot     = document.getElementById('selectedSlot').value;
+
+  if (!date)  { showToast("Please select a date.", "error"); return; }
+  if (!slot)  { showToast("Please select a time slot.", "error"); return; }
+
+  if (!isDayAvailable(date)) {
+    showToast("Doctor not available on this day.", "error");
+    return;
   }
 
-  // Guard: prevents multiple simultaneous fetches if user clicks rapidly
-  let recordsLoading = false;
+  const datetime = `${date} ${slot}:00`;
 
-  async function loadRecords() {
-    if (recordsLoading) return;
-    recordsLoading = true;
+  try {
+    const res = await fetch('http://localhost:8000/book', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `patientId=P001&doctorId=${doctorId}&datetime=${encodeURIComponent(datetime)}&type=${type}`
+    });
+    const result = await res.text();
+    if (result === "conflict") {
+      showToast("That slot was just taken. Please pick another.", "error");
+      onDateChange(); // Refresh slots
+    } else if (result === "success") {
+      showToast("Appointment request sent!", "success");
+      document.getElementById('apptDate').value = '';
+      document.getElementById('slotsSection').style.display = 'none';
+      document.getElementById('selectedSlot').value = '';
+    } else {
+      showToast("Server error: " + result, "error");
+    }
+  } catch (err) {
+    showToast("Cannot connect to server.", "error");
+  }
+}
 
-    const container = document.getElementById('recordsList');
+let recordsLoading = false;
 
-    // Wipe completely before anything else
+async function loadRecords() {
+  if (recordsLoading) return;
+  recordsLoading = true;
+  const container = document.getElementById('recordsList');
+  container.innerHTML = '<div class="no-records"><span class="icon">⏳</span>Loading records...</div>';
+
+  try {
+    const res = await fetch('http://localhost:8000/getRecords?patientId=P001');
+    const raw = await res.text();
     container.innerHTML = '';
-    container.innerHTML = '<div class="no-records"><span class="icon">⏳</span>Loading records...</div>';
 
-    try {
-      const res = await fetch('http://localhost:8000/getRecords?patientId=P001');
-      const raw = await res.text();
-
-      // Paste what you see here in browser console (F12) if issues persist
-      console.log("RAW SERVER RESPONSE:", JSON.stringify(raw));
-
-      // Wipe spinner before rendering
-      container.innerHTML = '';
-
-      if (!raw || !raw.trim()) {
-        container.innerHTML = '<div class="no-records"><span class="icon">📋</span>No records found.</div>';
-        recordsLoading = false;
-        return;
-      }
-
-      // Split on ## separator, drop empty segments
-      const segments = raw.split("##").filter(s => s.trim() !== "");
-      console.log("TOTAL SEGMENTS:", segments.length);
-
-      if (segments.length === 0) {
-        container.innerHTML = '<div class="no-records"><span class="icon">📋</span>No records found.</div>';
-        recordsLoading = false;
-        return;
-      }
-
-      // Deduplicate — if Java sends the same record multiple times, only render once
-      const seen   = new Set();
-      const unique = segments.filter(s => {
-        const key = s.trim();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      console.log("UNIQUE SEGMENTS AFTER DEDUP:", unique.length);
-
-      unique.forEach((segment, idx) => {
-        const text = segment.replace(/\\n/g, "\n").trim();
-
-        const firstPipe = text.indexOf("|");
-        const lastPipe  = text.lastIndexOf("|");
-
-        if (firstPipe === -1 || lastPipe === -1 || firstPipe === lastPipe) {
-          console.warn("Skipping malformed segment", idx, JSON.stringify(text));
-          return;
-        }
-
-        const diagnosis    = text.substring(0, firstPipe).trim();
-        const prescription = text.substring(firstPipe + 1, lastPipe).trim();
-        const date         = text.substring(lastPipe + 1).trim();
-
-        let medicinesHtml = "";
-        let dosHtml       = "";
-        let dontsHtml     = "";
-
-        prescription.split("\n").forEach(line => {
-          line = line.trim();
-          if (line.startsWith("Medicines:")) {
-            const items = line.replace("Medicines:", "").split("#").map(i => i.trim()).filter(Boolean);
-            medicinesHtml = `<div class="prescription-section"><h4>Medicines</h4><ul>${items.map(i => `<li>${i}</li>`).join("")}</ul></div>`;
-          } else if (line.startsWith("Do:")) {
-            const items = line.replace("Do:", "").split("#").map(i => i.trim()).filter(Boolean);
-            dosHtml = `<div class="prescription-section"><h4>Do's</h4><ul>${items.map(i => `<li>${i}</li>`).join("")}</ul></div>`;
-          } else if (line.startsWith("Don't:")) {
-            const items = line.replace("Don't:", "").split("#").map(i => i.trim()).filter(Boolean);
-            dontsHtml = `<div class="prescription-section"><h4>Don'ts</h4><ul>${items.map(i => `<li>${i}</li>`).join("")}</ul></div>`;
-          }
-        });
-
-        const card = document.createElement("div");
-        card.className = "prescription";
-        card.innerHTML = `
-          <div class="prescription-header">
-            <div class="hospital-name">🏥 MediCore Hospital</div>
-            <div class="prescription-date">${date}</div>
-          </div>
-          <hr>
-          <div class="prescription-section"><h4>Diagnosis</h4><p>${diagnosis}</p></div>
-          ${medicinesHtml}
-          ${dosHtml}
-          ${dontsHtml}
-          <div class="prescription-footer">— Doctor Signature</div>
-        `;
-        container.appendChild(card);
-      });
-
-    } catch (err) {
-      container.innerHTML = '<div class="no-records"><span class="icon">⚠️</span>Cannot connect to server. Is Java running on port 8000?</div>';
-      console.error("Fetch error:", err);
+    if (!raw || !raw.trim()) {
+      container.innerHTML = '<div class="no-records"><span class="icon">📋</span>No records found.</div>';
+      recordsLoading = false;
+      return;
     }
 
-    recordsLoading = false;
+    const segments = raw.split("##").filter(s => s.trim() !== "");
+    const seen = new Set();
+    const unique = segments.filter(s => {
+      if (seen.has(s.trim())) return false;
+      seen.add(s.trim());
+      return true;
+    });
+
+    unique.forEach(segment => {
+      const text = segment.replace(/\\n/g, "\n").trim();
+      const firstPipe = text.indexOf("|");
+      const lastPipe  = text.lastIndexOf("|");
+      if (firstPipe === -1 || firstPipe === lastPipe) return;
+
+      const diagnosis    = text.substring(0, firstPipe).trim();
+      const prescription = text.substring(firstPipe + 1, lastPipe).trim();
+      const date         = text.substring(lastPipe + 1).trim();
+
+      let medicinesHtml = '', dosHtml = '', dontsHtml = '';
+      prescription.split("\n").forEach(line => {
+        line = line.trim();
+        if (line.startsWith("Medicines:")) {
+          const items = line.replace("Medicines:", "").split("#").map(i => i.trim()).filter(Boolean);
+          medicinesHtml = `<div class="prescription-section"><h4>Medicines</h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
+        } else if (line.startsWith("Do:")) {
+          const items = line.replace("Do:", "").split("#").map(i => i.trim()).filter(Boolean);
+          dosHtml = `<div class="prescription-section"><h4>Do's</h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
+        } else if (line.startsWith("Don't:")) {
+          const items = line.replace("Don't:", "").split("#").map(i => i.trim()).filter(Boolean);
+          dontsHtml = `<div class="prescription-section"><h4>Don'ts</h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
+        }
+      });
+
+      const card = document.createElement("div");
+      card.className = "prescription";
+      card.innerHTML = `
+        <div class="prescription-header">
+          <div class="hospital-name">🏥 MediCore Hospital</div>
+          <div class="prescription-date">${date}</div>
+        </div>
+        <hr>
+        <div class="prescription-section"><h4>Diagnosis</h4><p>${diagnosis}</p></div>
+        ${medicinesHtml}${dosHtml}${dontsHtml}
+        <div class="prescription-footer">— Doctor Signature</div>
+      `;
+      container.appendChild(card);
+    });
+
+  } catch (err) {
+    container.innerHTML = '<div class="no-records"><span class="icon">⚠️</span>Cannot connect to server.</div>';
   }
+  recordsLoading = false;
+}
 
 </script>
 

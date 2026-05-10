@@ -101,73 +101,61 @@
 <script src="script.js"></script>
 
 <script>
-function initAdmin(){
+async function initAdmin() {
   requireLogin('admin');
-
-  document.getElementById('totalPatients').innerText = DB.patients.length;
-  document.getElementById('totalDoctors').innerText = DB.doctors.length;
-  document.getElementById('totalAppointments').innerText = DB.appointments.length;
-
-  loadPatients();
-  loadDoctors();
-  loadAppointments();
-  loadStats();
+  await Promise.all([loadPatients(), loadDoctors(), loadAppointments()]);
 }
 
-function loadPatients(){
+async function loadPatients() {
+  const res = await fetch('http://localhost:8000/getPatients');
+  const raw = await res.text();
+  const rows = raw.split('##').filter(s => s.trim());
+
+  document.getElementById('totalPatients').innerText = rows.length;
+
   let html = "<tr><th>ID</th><th>Name</th><th>Phone</th></tr>";
-  DB.patients.forEach(p=>{
-    html += `<tr><td>${p.id}</td><td>${p.name}</td><td>${p.phone}</td></tr>`;
+  rows.forEach(row => {
+    const [id, name, phone] = row.split('|');
+    html += `<tr><td>${id}</td><td>${name}</td><td>${phone}</td></tr>`;
   });
   document.getElementById('patientTable').innerHTML = html;
 }
 
-function loadDoctors(){
-  let html = "<tr><th>ID</th><th>Name</th><th>Specialization</th></tr>";
-  DB.doctors.forEach(d=>{
-    html += `<tr><td>${d.id}</td><td>${d.name}</td><td>${d.specialization}</td></tr>`;
+async function loadDoctors() {
+  const res = await fetch('http://localhost:8000/getDoctors');
+  const raw = await res.text();
+  const rows = raw.split('##').filter(s => s.trim());
+
+  document.getElementById('totalDoctors').innerText = rows.length;
+
+  let html = "<tr><th>ID</th><th>Name</th><th>Specialization</th><th>Phone</th><th>Available Days</th></tr>";
+  rows.forEach(row => {
+    const [id, name, spec, phone, days] = row.split('|');
+    html += `<tr><td>${id}</td><td>${name}</td><td>${spec}</td><td>${phone}</td><td>${days}</td></tr>`;
   });
   document.getElementById('doctorTable').innerHTML = html;
 }
 
 async function loadAppointments() {
-  const res  = await fetch('http://localhost:8000/getAppointments');
-  const raw  = await res.text();
+  const res = await fetch('http://localhost:8000/getAppointments');
+  const raw = await res.text();
+  const rows = raw.split('##').filter(s => s.trim());
 
-  const table = document.getElementById('apptTable');
-
-  if (!raw || !raw.trim()) {
-    table.innerHTML = "<tr><td colspan='5'>No appointments found.</td></tr>";
-    return;
-  }
+  document.getElementById('totalAppointments').innerText = rows.length;
 
   let html = "<tr><th>ID</th><th>Patient</th><th>Doctor</th><th>Date & Time</th><th>Status</th></tr>";
-
-  raw.split("##").filter(s => s.trim() !== "").forEach(row => {
-    const [id, patient, doctor, datetime, status, type] = row.split("|");
-    const badgeClass = status === 'scheduled' ? 'badge-blue'
+  rows.forEach(row => {
+    const [id, patient, doctor, datetime, status] = row.split('|');
+    const badgeClass = status === 'scheduled' ? 'badge-amber'
                      : status === 'completed' ? 'badge-green'
                      : 'badge-red';
     html += `<tr>
-      <td>${id}</td>
-      <td>${patient}</td>
-      <td>${doctor}</td>
+      <td>${id}</td><td>${patient}</td><td>${doctor}</td>
       <td>${datetime}</td>
       <td><span class="badge ${badgeClass}">${status}</span></td>
     </tr>`;
   });
-
-  table.innerHTML = html;
-}
-
-async function loadStats() {
-  const res = await fetch('http://localhost:8000/getAppointments');
-  const raw = await res.text();
-  const count = raw ? raw.split("##").filter(s => s.trim() !== "").length : 0;
-  document.getElementById('totalAppointments').innerText = count;
-  // patients and doctors still from mock — good enough for demo
-  document.getElementById('totalPatients').innerText = DB.patients.length;
-  document.getElementById('totalDoctors').innerText = DB.doctors.length;
+  document.getElementById('apptTable').innerHTML = html;
 }
 </script>
 

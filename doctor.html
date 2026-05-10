@@ -5,96 +5,266 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
   <title>Doctor Dashboard</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    .app-shell {
+      grid-template-columns: 1fr;
+    }
+  </style>
 </head>
 <body onload="initDoctor()">
 
 <div class="app-shell">
 
-<div class="topbar">
-  <div class="topbar-brand">
-    <div class="logo-icon">🏥</div>
-    <span>MediCore HMS</span>
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="logo-icon">🏥</div>
+      <span>MediCore HMS</span>
+    </div>
+    <button class="btn-logout" onclick="logout()">Logout</button>
   </div>
-  <button class="btn-logout" onclick="logout()">Logout</button>
-</div>
 
-<div class="sidebar">
-  <div class="nav-item active" onclick="activatePage('appointments','nav1')" id="nav1">📅 Appointments</div>
-  <div class="nav-item" onclick="activatePage('addRecord','nav2')" id="nav2">📝 Add Record</div>
-</div>
+  <div class="sidebar" style="display:none;"></div>
 
 <div class="main">
   <div class="page" id="addRecord">
-  <div class="card">
+    <div class="card">
 
-    <div class="card-header">
-      <h3>🩺 Add Medical Record</h3>
-    </div>
-
-    <div class="card-body">
-
-      <!-- BASIC INFO -->
-      <div class="form-row">
-        <input type="text" id="patientId" placeholder="Patient ID (P001)">
-        <input type="text" id="apptId" placeholder="Appointment ID (A001)">
+      <div class="card-header">
+        <h3>🩺 Add Medical Record</h3>
+        <button class="btn btn-outline btn-sm" onclick="activatePage('appointments','nav1')">
+          ← Back to Appointments
+        </button>
       </div>
 
-      <!-- OBSERVATIONS -->
-      <h4>Observations</h4>
+      <div class="card-body">
 
-      <textarea id="symptoms" placeholder="Symptoms (use # to separate)"></textarea>
+          <!-- BASIC INFO -->
+        <div class="form-row">
+          <input type="hidden" id="patientId">
+          <input type="hidden" id="apptId">
+        </div>
 
-      <input type="text" id="diagnosis" placeholder="Diagnosis">
+        <!-- Selected patient display -->
+        <div id="selectedPatient" style="
+          display:none;
+          padding:8px 12px;
+          background:#e8f5e9;
+          border:1px solid #a5d6a7;
+          border-radius:6px;
+          margin-bottom:8px;
+          font-size:14px; 
+          color:#2e7d32;
+        "></div>
 
-      <!-- PRESCRIPTION -->
-      <h4>Prescription</h4>
+        <!-- OBSERVATIONS -->
+        <h4>Observations</h4>
+        <textarea id="symptoms" placeholder="Symptoms (use # to separate)"></textarea>
+        <input type="text" id="diagnosis" placeholder="Diagnosis">
 
-      <textarea id="medicines" placeholder="Medicines & Dosage (use # and @)"></textarea>
+        <!-- PRESCRIPTION -->
+        <h4>Prescription</h4>
+        <textarea id="medicines" placeholder="Medicines & Dosage (use # and @)"></textarea>
+        <input type="text" id="dos" placeholder="Do's (# separated)">
+        <input type="text" id="donts" placeholder="Don'ts (# separated)">
+        <input type="text" id="investigations" placeholder="Investigations">
+        <input type="date" id="followup">
+        <input type="number" id="fees" placeholder="Fees">
+        <button class="btn btn-primary" onclick="addRecord()">Save Record</button>
 
-      <input type="text" id="dos" placeholder="Do's (# separated)">
-      <input type="text" id="donts" placeholder="Don'ts (# separated)">
-
-      <input type="text" id="investigations" placeholder="Investigations">
-
-      <input type="date" id="followup">
-
-      <input type="number" id="fees" placeholder="Fees">
-
-      <button class="btn btn-primary" onclick="addRecord()">Save Record</button>
-
+      </div>
     </div>
   </div>
-</div>
 
-<div class="page active" id="appointments">
-  <div class="card">
-    <div class="card-header"><h3>My Appointments</h3></div>
-    <div class="card-body">
-      <table id="doctorAppts"></table>
+  <div class="page active" id="appointments">
+    <div class="card">
+      <div class="card-header"><h3>My Appointments</h3></div>
+      <div class="card-body">
+        <div style="margin-bottom:12px;">
+          <input type="text" id="apptSearch" placeholder="🔍 Search patient by name..."
+                oninput="filterAppointments(this.value)"
+                style="width:100%; padding:8px 12px; border:1px solid #ddd;
+                        border-radius:6px; font-size:14px; box-sizing:border-box;">
+        </div>
+        <table id="doctorAppts"></table>
+      </div>
     </div>
   </div>
-</div>
 
+    <div class="page" id="medicalHistory">
+    <div class="card">
+
+      <div class="card-header">
+        <h3>🗂️ Medical History</h3>
+        <button class="btn btn-outline btn-sm" onclick="activatePage('appointments','nav1')">
+          ← Back to Appointments
+        </button>
+      </div>
+
+      <div class="card-body">
+        <div id="historyPatientBadge" style="
+          display:none;
+          padding:8px 12px;
+          background:#e3f2fd;
+          border:1px solid #90caf9;
+          border-radius:6px;
+          margin-bottom:16px;
+          font-size:14px;
+          color:#1565c0;
+        "></div>
+        <div id="historyContent">
+          <p style="color:#999;">Select a patient from Appointments to view their medical history.</p>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 </div>
 
 <script src="script.js"></script>
 
 <script>
-function initDoctor(){
+
+function openAddRecord(patientId, patientName, apptId) {
+  activatePage('addRecord', 'nav2');
+
+  document.getElementById('patientId').value = patientId;
+  document.getElementById('apptId').value = apptId;
+
+  const badge = document.getElementById('selectedPatient');
+  badge.textContent = `✔ Selected: ${patientName} (${patientId})`;
+  badge.style.display = 'block';
+}
+
+let allAppointments = [];
+
+async function initDoctor() {
   const user = requireLogin('doctor');
 
-  let html = "<tr><th>Patient</th><th>Date</th><th>Status</th></tr>";
+  try {
+    const res = await fetch('http://localhost:8000/getAppointments?doctorId=D001');
+    const text = await res.text();
 
-  DB.appointments.forEach(a=>{
+    if (!text || text.trim() === '') {
+      allAppointments = [];
+      renderAppointments([]);
+      return;
+    }
+
+    // Format from server: appt_id|patient_name|doctor_name|datetime|status|type##
+    allAppointments = text.split('##')
+      .filter(e => e.trim())
+      .map(e => {
+        const parts = e.split('|');
+        return {
+          appt_id:      parts[0],
+          patient_name: parts[1],
+          doctor_name:  parts[2],
+          datetime:     parts[3],
+          status:       parts[4],
+          type:         parts[5],
+        };
+      });
+
+    renderAppointments(allAppointments);
+
+  } catch (err) {
+    console.error('Failed to load appointments:', err);
+  }
+}
+
+function renderAppointments(appointments) {
+  let html = `<tr>
+    <th>Patient</th><th>Date</th><th>Type</th><th>Status</th>
+    <th>Prescription</th><th>History</th><th>Manage</th>
+  </tr>`;
+
+  appointments.forEach(a => {
+    const status = a.status;
+
+    let badgeClass = '';
+    if (status === 'pending')   badgeClass = 'badge-blue';
+    if (status === 'scheduled') badgeClass = 'badge-amber';
+    if (status === 'completed') badgeClass = 'badge-green';
+    if (status === 'cancelled') badgeClass = 'badge-red';
+
+    // Prescription cell
+    const prescCell = (status === 'scheduled')
+      ? `<button class="btn btn-primary btn-sm"
+           onclick="openAddRecord('${a.patient_id}', '${a.patient_name}', '${a.appt_id}')">
+           ✏️ Write Prescription
+         </button>`
+      : `<span style="font-style:italic;font-size:12px;color:var(--muted);">
+           ${status === 'pending' ? 'accept first' : status === 'cancelled' ? 'not available' : '—'}
+         </span>`;
+
+    // Manage cell
+    let manageCell = '—';
+    if (status === 'pending') {
+      manageCell = `
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-success btn-sm"
+            onclick="updateStatus('${a.appt_id}', 'scheduled')">
+            ✅ Accept
+          </button>
+          <button class="btn btn-danger btn-sm"
+            onclick="updateStatus('${a.appt_id}', 'cancelled')">
+            ❌ Cancel
+          </button>
+        </div>`;
+    } else if (status === 'scheduled') {
+      manageCell = `
+        <button class="btn btn-sm" style="background:var(--green-lt);color:var(--green);"
+          onclick="updateStatus('${a.appt_id}', 'completed')">
+          ☑️ Mark Complete
+        </button>`;
+    }
+
     html += `<tr>
-      <td>${DB.getPatient(a.patient_id).name}</td>
-      <td>${fmtDateTime(a.datetime)}</td>
-      <td>${a.status}</td>
+      <td>${a.patient_name}</td>
+      <td>${a.datetime}</td>
+      <td>${a.type ?? '—'}</td>
+      <td><span class="badge ${badgeClass}">${status}</span></td>
+      <td>${prescCell}</td>
+      <td>
+        <button class="btn btn-sm" style="background:var(--amber-lt);color:var(--amber);"
+          onclick="viewHistory('${a.patient_id}', '${a.patient_name}')">
+          🗂️ View History
+        </button>
+      </td>
+      <td>${manageCell}</td>
     </tr>`;
   });
 
   document.getElementById('doctorAppts').innerHTML = html;
+}
+
+async function updateStatus(apptId, status) {
+  try {
+    const res = await fetch('http://localhost:8000/updateStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `apptId=${encodeURIComponent(apptId)}&status=${encodeURIComponent(status)}`
+    });
+    const result = await res.text();
+    if (result === 'success') {
+      const label = status === 'scheduled' ? 'Appointment accepted'
+                  : status === 'cancelled' ? 'Appointment cancelled'
+                  : 'Marked as complete';
+      showToast(label, 'success');
+      await initDoctor(); // Refresh the table
+    } else {
+      showToast('Failed to update status', 'error');
+    }
+  } catch (err) {
+    showToast('Cannot connect to server.', 'error');
+  }
+}
+
+function filterAppointments(query) {
+  const filtered = allAppointments.filter(a =>
+    a.patient_name.toLowerCase().includes(query.toLowerCase())
+  );
+  renderAppointments(filtered);
 }
 
 async function addRecord() {
@@ -137,6 +307,87 @@ async function addRecord() {
   } else {
     showToast("Error adding record", "error");
   }
+}
+
+async function viewHistory(patientId, patientName) {
+  // Switch to Medical History page
+  activatePage('medicalHistory', 'nav3');
+
+  // Show patient badge
+  const badge = document.getElementById('historyPatientBadge');
+  badge.textContent = `Showing records for: ${patientName} (${patientId})`;
+  badge.style.display = 'block';
+
+  // Show loading state
+  const content = document.getElementById('historyContent');
+  content.innerHTML = '<p style="color:#999;">Loading records...</p>';
+
+  try {
+    const res = await fetch(`http://localhost:8000/getRecords?patientId=${patientId}`);
+    const text = await res.text();
+
+    if (!text || text.trim() === '') {
+      content.innerHTML = '<p style="color:#999;">No medical records found for this patient.</p>';
+      return;
+    }
+
+    const records = text.split('##').filter(r => r.trim());
+
+    if (records.length === 0) {
+      content.innerHTML = '<p style="color:#999;">No medical records found for this patient.</p>';
+      return;
+    }
+
+    content.innerHTML = records.map(r => buildRecordCard(r)).join('');
+
+  } catch (err) {
+    content.innerHTML = '<p style="color:red;">Error loading records. Is the server running?</p>';
+  }
+}
+
+function buildRecordCard(raw) {
+  const parts = raw.split(' | ');
+  const diagnosis    = parts[0]?.trim() || '—';
+  const prescription = parts[1]?.trim() || '';
+  const date         = parts[2]?.trim() || '—';
+
+  const prescLines = prescription.replace(/\\n/g, '\n').split('\n');
+
+  let medicines = '—', dos = '—', donts = '—';
+  prescLines.forEach(line => {
+    if (line.startsWith('Medicines:')) medicines = line.replace('Medicines:', '').trim() || '—';
+    if (line.startsWith('Do:'))        dos       = line.replace('Do:', '').trim()        || '—';
+    if (line.startsWith("Don't:"))     donts     = line.replace("Don't:", '').trim()     || '—';
+  });
+
+  const formatList = val =>
+    val === '—' ? '—' : val.split('#').map(s => s.trim()).filter(Boolean)
+                           .map(s => `<span class="list-item">• ${s}</span>`).join('');
+
+  return `
+    <div class="record-card">
+      <div class="record-header">
+        <span>🩺 ${diagnosis}</span>
+        <span class="badge badge-blue record-date">📅 ${date}</span>
+      </div>
+      <div class="record-body" style="margin-top:14px;">
+        <div class="three-col">
+          <div class="rx-block rx-medicine">
+            <div class="rx-label">💊 Medicines</div>
+            <div class="rx-content">${formatList(medicines)}</div>
+          </div>
+          <div class="rx-block rx-do">
+            <div class="rx-label">✅ Do's</div>
+            <div class="rx-content">${formatList(dos)}</div>
+          </div>
+          <div class="rx-block rx-dont">
+            <div class="rx-label">❌ Don'ts</div>
+            <div class="rx-content">${formatList(donts)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 </script>
