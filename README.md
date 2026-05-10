@@ -1,7 +1,6 @@
 # 🏥 MediCore HMS — Hospital Management System
 
-> A full-stack, database-driven Hospital Management System
-> Manages patients, doctors, appointments, and medical records through a role-based web interface backed by a live MySQL database.
+> A full-stack, database-driven Hospital Management System which manages -> patients, doctors, appointments, and medical records through a role-based web interface backed by a live MySQL database.
 
 ---
 
